@@ -1,1 +1,42 @@
+replicaCount: 2
 
+image:
+  registry: <jouw-acr-naam>.azurecr.io
+  repository: aks-demo-app
+  tag: latest          # wordt door CI overschreven met de commit SHA
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 3000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+probes:
+  readiness:
+    path: /healthz
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 10
+    periodSeconds: 15
+
+# Voorbeeld: environment variabelen die je makkelijk per omgeving kunt aanpassen
+env: []
+  # - name: LOG_LEVEL
+  #   value: "info"
+
+# Voorbeeld: autoscaling uitzetten/aanzetten zonder de templates aan te raken
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 75
