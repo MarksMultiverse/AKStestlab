@@ -52,6 +52,48 @@ Bij elke push naar `main`:
 5. Past de manifests toe op de cluster.
 6. Toont het externe IP van de service.
 
+## Optie: deployen met Helm
+
+Naast de losse manifests in `k8s/` bevat de repo ook een volwaardige Helm chart in
+`helm/aks-demo-app/`, met bijbehorende workflow `.github/workflows/deploy-aks-helm.yml`.
+
+Voordelen ten opzichte van kale manifests:
+- **Eén release beheren** – `helm upgrade --install` maakt de resources aan als ze nog niet bestaan, of werkt ze bij.
+- **`--atomic`** – bij een mislukte deployment rolt Helm automatisch terug naar de vorige werkende versie.
+- **Configuratie per omgeving** – via aparte `values-staging.yaml` / `values-prod.yaml` bestanden, zonder de templates te wijzigen.
+- **Versiegeschiedenis** – `helm history aks-demo-app` toont alle eerdere releases, `helm rollback` voor handmatige rollback.
+
+Gebruik **óf** `deploy-aks.yml` (kubectl + manifests) **óf** `deploy-aks-helm.yml` (Helm) – niet beide tegelijk, anders krijg je conflicterende resources omdat Helm zijn eigen labels/annotaties op resources zet.
+
+### Lokaal de chart testen
+```bash
+# Templates renderen zonder te deployen (handig om te controleren)
+helm template aks-demo-app ./helm/aks-demo-app \
+  --set image.registry=<acr-naam>.azurecr.io \
+  --set image.tag=latest
+
+# Chart valideren
+helm lint ./helm/aks-demo-app
+
+# Handmatig deployen
+helm upgrade aks-demo-app ./helm/aks-demo-app \
+  --install --namespace default --create-namespace \
+  --set image.registry=<acr-naam>.azurecr.io \
+  --set image.tag=latest
+```
+
+### Environment-specifieke waarden
+Maak bijvoorbeeld `helm/aks-demo-app/values-prod.yaml` aan met alleen de afwijkende waarden:
+```yaml
+replicaCount: 4
+autoscaling:
+  enabled: true
+```
+En deploy met:
+```bash
+helm upgrade aks-demo-app ./helm/aks-demo-app -f helm/aks-demo-app/values-prod.yaml --install
+```
+
 ## Lokaal testen
 
 ```bash
