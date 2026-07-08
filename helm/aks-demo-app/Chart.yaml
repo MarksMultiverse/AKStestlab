@@ -1,1 +1,6 @@
-
+apiVersion: v2
+name: aks-demo-app
+description: Helm chart voor de AKS demo applicatie
+type: application
+version: 0.1.0        # versie van de chart zelf, ophogen bij structurele wijzigingen
+appVersion: "1.0.0"   # versie van de applicatie, wordt normaal gesproken overschreven door CI
