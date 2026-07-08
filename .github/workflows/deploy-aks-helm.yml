@@ -1,0 +1,74 @@
+name: Build en Deploy naar AKS (Helm)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  REGISTRY_NAME: <jouw-acr-naam>
+  RESOURCE_GROUP: <jouw-resource-group>
+  CLUSTER_NAME: <jouw-aks-cluster-naam>
+  IMAGE_NAME: aks-demo-app
+  NAMESPACE: default
+  RELEASE_NAME: aks-demo-app
+
+permissions:
+  id-token: write   # nodig voor OIDC login naar Azure
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --- Azure login via OIDC (geen client secret nodig) ---
+      - name: Log in bij Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # --- Build & push image via ACR Tasks ---
+      - name: Build en push image naar ACR
+        run: |
+          az acr build \
+            --registry ${{ env.REGISTRY_NAME }} \
+            --image ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            .
+
+      # --- AKS credentials ophalen ---
+      - name: Haal AKS context op
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+
+      # --- Helm installeren (meestal al aanwezig op ubuntu-latest, maar voor de zekerheid) ---
+      - name: Helm setup
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.0
+
+      # --- Lint als kwaliteitscontrole voordat we deployen ---
+      - name: Helm lint
+        run: helm lint ./helm/aks-demo-app
+
+      # --- Deployen/upgraden via Helm ---
+      - name: Helm upgrade --install
+        run: |
+          helm upgrade ${{ env.RELEASE_NAME }} ./helm/aks-demo-app \
+            --install \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --set image.registry=${{ env.REGISTRY_NAME }}.azurecr.io \
+            --set image.repository=${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m \
+            --atomic
+
+      - name: Toon service endpoint
+        run: kubectl get service ${{ env.RELEASE_NAME }} -n ${{ env.NAMESPACE }}
